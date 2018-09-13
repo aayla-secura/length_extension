@@ -38,7 +38,7 @@ echo -n "$msg" > "$msgfile"
 sig=$(gen_sig "$msgfile")
 minlen=${#msg}
 maxlen=$(( explen + 128 ))
-echo "Seeding with $msg|$sig"
+echo "Seeding with $sig"
 echo "Trying lengths $minlen to $maxlen"
 while read -r one two ; do
     if [[ "$one" == digest* ]] ; then
