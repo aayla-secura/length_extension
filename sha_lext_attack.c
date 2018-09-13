@@ -88,7 +88,7 @@ int main (int argc, char *argv[])
 	assert (MD_HEXLEN == 8*CTX_DHEXLEN); /* digest is in 8 blocks */
 	ctx_t ctx;
 	memset (&ctx, 0, sizeof (ctx_t));
-  assert (sizeof (ctx.h[0])*2 == CTX_DHEXLEN);
+	assert (sizeof (ctx.h[0])*2 == CTX_DHEXLEN);
 	
 	CTX_INIT (&ctx);
 #ifdef ENABLE_DEBUG
@@ -259,7 +259,7 @@ set_ctx_md (ctx_t* ctx, const char* hex)
 		int rc = hexchar2num (hex[i]);
 		if (rc == -1)
 		{
-      printf ("Invalid character: %c\n", hex[i]);
+			printf ("Invalid character: %c\n", hex[i]);
 			return -1;
 		}
 		ctx->h[id] |= ((uint64_t)rc) << 4*((MD_HEXLEN-i-1) % CTX_DHEXLEN);
@@ -311,14 +311,14 @@ static void
 dump_ctx (ctx_t* ctx)
 {
 	printf (
-    "  Nl:     0x" CTX_DFMT "\n"
-    "  Nh:     0x" CTX_DFMT "\n"
-    "  num:    %d\n"
-    "  md_len: %d\n",
-    ctx->Nl,
-    ctx->Nh,
-    ctx->num,
-    ctx->md_len);
+		"  Nl:     0x" CTX_DFMT "\n"
+		"  Nh:     0x" CTX_DFMT "\n"
+		"  num:    %d\n"
+		"  md_len: %d\n",
+		ctx->Nl,
+		ctx->Nh,
+		ctx->num,
+		ctx->md_len);
 	for (int i = 0; i < 8; i++)
 		printf (
 			"  h%02d:    0x" CTX_DFMT "\n", i, ctx->h[i]);
