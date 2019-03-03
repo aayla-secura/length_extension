@@ -1,8 +1,15 @@
 #!/bin/bash
 
 DEBUG=0
-SALT=$(xxd -p -l 120 < /dev/urandom | tr -d '\n')
-ALGO='sha512sum'
+SALT=$(xxd -p -l 8 < /dev/urandom | tr -d '\n')
+
+usage() {
+  cat <<EOF
+Usage:
+  ${BASH_SOURCE[0]} 256|512 <orig msg> <new msg>
+EOF
+exit 1
+}
 
 gen_sig() {
     local msgfile="$1" sig
@@ -21,14 +28,19 @@ ver_sig() {
     fi
 }
 
-if [[ $# -ne 2 ]] ; then
-    echo "Usage: ${BASH_SOURCE[0]} <msg> <newmsg>"
-    exit 0
-fi
+sha="$1"
+msg="$2"
+newmsg="$3"
+[[ -n $sha && -n $msg && -n $newmsg ]] || usage
 
-msg="$1"
-newmsg="$2"
-[[ -n $msg && -n $newmsg ]] || exit 1
+ALGO="sha${sha}sum"
+if ! /usr/bin/which $ALGO >/dev/null ; then
+  if ! /usr/bin/which sha2 >/dev/null ; then
+    echo "Can't find sha2 utility. Ensure that either $ALGO or sha2 is installed and in your PATH"
+    exit 1
+  fi
+  ALGO="sha2 -${sha} -q"
+fi
 
 explen=$(( ${#SALT} + ${#msg} ))
 msgfile=$(mktemp)
@@ -39,7 +51,8 @@ sig=$(gen_sig "$msgfile")
 minlen=${#msg}
 maxlen=$(( explen + 128 ))
 echo "Seeding with $sig"
-echo "Trying lengths $minlen to $maxlen"
+echo "Generated random salt of length ${#SALT}: $SALT"
+echo "Trying length of salt+original message: from $minlen to $maxlen. Correct one should be $explen."
 while read -r one two ; do
     if [[ "$one" == digest* ]] ; then
         newsig="$two"

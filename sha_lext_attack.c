@@ -15,9 +15,9 @@ typedef SHA256_CTX ctx_t;
 #  define CTX_UPDATE SHA256_Update
 #  define CTX_FINAL  SHA256_Final
 #  define CTX_DFMT   "%08x"
-// length of message is 8-byte big-endian
+// length of the message is given by a 8-byte number
 #  define CBLOCK_AVAIL_LEN  (CBLOCK_LEN - 1 - 8)
-#  define CTX_DLEN   32
+#  define CTX_DLEN   32 // size of message sched. array word in bits
 #  define CTX_LMASK  0xFFFFFFFF
 #else
 typedef SHA512_CTX ctx_t;
@@ -27,14 +27,16 @@ typedef SHA512_CTX ctx_t;
 #  define CTX_UPDATE SHA512_Update
 #  define CTX_FINAL  SHA512_Final
 #  define CTX_DFMT   "%016llx"
-// length of message is 16-bit big-endian
+// length of the message is given by a 16-byte number
 #  define CBLOCK_AVAIL_LEN  (CBLOCK_LEN - 1 - 16)
-#  define CTX_DLEN   64 // in bits
+#  define CTX_DLEN   64 // size of message sched. array word in bits
 #  define CTX_LMASK  0xFFFFFFFFFFFFFFFF
 #endif
 
+// number of hex chars in the digest (2 hex chars per byte)
 #define MD_HEXLEN  (MD_LEN*2)
-#define CTX_DHEXLEN (CTX_DLEN >> 2) // 2 hex chars per byte
+// number of hex chars in a block (CTX_DLEN/8 * 2 hex chars per byte)
+#define CTX_DHEXLEN (CTX_DLEN >> 2)
 
 #define DUMP_ROW_LEN  8 // how many bytes per row when dumping buf
 #define DUMP_OFF_LEN  5 // how many digits to use for the offset
@@ -162,20 +164,26 @@ int main (int argc, char *argv[])
 	}
 	assert (msg != NULL);
 	
-	/* Initial length and padding. */
+	/* Padding for the initial salt+original message length (min_l). */
 	ssize_t npads = CBLOCK_AVAIL_LEN - (min_l % CBLOCK_LEN);
 	if (npads < 0)
 		npads += CBLOCK_LEN;
 	assert (npads >= 0 && npads < CBLOCK_LEN);
 	
-	/* npads is no. of zeroes, CBLOCK_LEN - CBLOCK_AVAIL_LEN is 1 + no.
-	 * of bytes for length */
+	/* lpadded is a multiple of the block size: length of salt+original
+	* message + 1 (accounting for \x80) + the no. of zero pads + the
+	* size of the length field */
 	unsigned long long lpadded = min_l + npads + CBLOCK_LEN - CBLOCK_AVAIL_LEN;
 	assert (lpadded % CBLOCK_LEN == 0);
 	ctx.Nl = ((lpadded << 3) & CTX_LMASK);
 	ctx.Nh = (lpadded >> (CTX_DLEN - 3));
+	/* Append the new message, it will start at the beginning of a new
+	* block */
 	CTX_UPDATE (&ctx, msg, strlen (msg));
 	
+	/* Calling CTX_FINAL on the ctx context will render it unusable for
+	* further modifications. So we instead copy ctx to ctxtmp every
+	* time we need to print the digest, and call CTX_FINAL on ctxtmp */
 	ctx_t ctxtmp;
 	memcpy (&ctxtmp, &ctx, sizeof (ctx_t));
 	unsigned char md[MD_LEN] = {0};
@@ -185,7 +193,7 @@ int main (int argc, char *argv[])
 	
 	for (unsigned long long l = min_l; l <= max_l; l += step)
 	{
-		/* Print padding */
+		/* Print padding... */
 		printf ("%5llu\t\\x80", l);
 #ifdef ENABLE_DEBUG
 		printf (" + \\x00 x %lu + ", npads);
@@ -193,7 +201,7 @@ int main (int argc, char *argv[])
 		for (size_t i = 0; i < (size_t)npads; i++)
 			printf ("\\x00");
 #endif
-		/* length in big-endian */
+		/* ... and length field in big-endian */
 		unsigned long long Nl = ((l << 3) & CTX_LMASK);
 		unsigned long long Nh = (l >> (CTX_DLEN - 3));
 		for (int s = (CTX_DLEN - 8); s >=0; s -= 8)
@@ -205,6 +213,7 @@ int main (int argc, char *argv[])
 		npads -= step;
 		while (npads < 0)
 		{
+			/* Starting a new block; digest changes here, print it */
 			npads += CBLOCK_LEN;
 			ctx.Nl += (CBLOCK_LEN << 3);
 			if(ctx.Nl < (CBLOCK_LEN << 3))
@@ -262,8 +271,8 @@ set_ctx_md (ctx_t* ctx, const char* hex)
 			printf ("Invalid character: %c\n", hex[i]);
 			return -1;
 		}
-		ctx->h[id] |= ((uint64_t)rc) << 4*((MD_HEXLEN-i-1) % CTX_DHEXLEN);
 		assert (id < 8);
+		ctx->h[id] |= ((uint64_t)rc) << 4*((MD_HEXLEN-i-1) % CTX_DHEXLEN);
 	}
 #ifdef ENABLE_DEBUG
 		printf ("digest[%lu]: 0x" CTX_DFMT "\n", id, ctx->h[id]);
